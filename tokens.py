@@ -216,8 +216,8 @@ def traverse_primitive_colors(data: Dict[str, Any], path: List[str],
 
 
 def traverse_spacing_dimensions(data: Dict[str, Any], path: List[str],
-                               dimensions: Dict[str, int]) -> None:
-    """遍历primitives模块中的spacing尺寸"""
+                               dimensions: List[Tuple[str, int]]) -> None:
+    """遍历primitives模块中的spacing尺寸，保持节点访问顺序"""
     for key, value in data.items():
         current_path = path + [key]
 
@@ -226,7 +226,7 @@ def traverse_spacing_dimensions(data: Dict[str, Any], path: List[str],
                 # 这是一个尺寸节点
                 dimension_value = value['value']
                 xml_name = format_spacing_name(current_path)
-                dimensions[xml_name] = dimension_value
+                dimensions.append((xml_name, dimension_value))
             else:
                 # 继续递归
                 traverse_spacing_dimensions(value, current_path, dimensions)
@@ -276,6 +276,50 @@ def generate_dimens_xml(dimensions: Dict[str, int], output_path: str, file_name:
     print(f"Generated: {file_path}")
 
 
+def generate_ordered_dimens_xml(dimensions: List[Tuple[str, int]], output_path: str, file_name: str) -> None:
+    """生成Android dimens.xml文件，保持节点访问顺序"""
+    xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    xml_content += '<resources>\n'
+
+    # 按照节点访问顺序生成，不排序
+    for name, value in dimensions:
+        xml_content += f'    <dimen name="{name}">{value}dp</dimen>\n'
+
+    xml_content += '</resources>'
+
+    # 确保输出目录存在
+    os.makedirs(output_path, exist_ok=True)
+
+    # 写入文件
+    file_path = os.path.join(output_path, file_name)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+
+    print(f"Generated: {file_path}")
+
+
+def generate_ordered_semantic_dimens_xml(dimensions: List[Tuple[str, str]], output_path: str, file_name: str) -> None:
+    """生成Android语义dimens.xml文件，保持节点访问顺序"""
+    xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    xml_content += '<resources>\n'
+
+    # 按照节点访问顺序生成，不排序
+    for name, reference in dimensions:
+        xml_content += f'    <dimen name="{name}">@dimen/{reference}</dimen>\n'
+
+    xml_content += '</resources>'
+
+    # 确保输出目录存在
+    os.makedirs(output_path, exist_ok=True)
+
+    # 写入文件
+    file_path = os.path.join(output_path, file_name)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+
+    print(f"Generated: {file_path}")
+
+
 def generate_semantic_dimens_xml(dimensions: Dict[str, int], output_path: str, file_name: str) -> None:
     """生成Android dimens.xml文件"""
     xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -309,9 +353,9 @@ def process_primitives(data: Dict[str, Any]) -> Tuple[Dict[str, str], Dict[str, 
     return light_colors, dark_colors
 
 
-def process_spacing_dimensions(data: Dict[str, Any]) -> Dict[str, int]:
+def process_spacing_dimensions(data: Dict[str, Any]) -> List[Tuple[str, int]]:
     """处理primitives模块中的spacing尺寸"""
-    dimensions = {}
+    dimensions = []
     
     print("Extracting spacing dimensions...")
     if 'primitives' in data and 'spacing' in data['primitives']:
@@ -390,6 +434,10 @@ def resolve_color_reference_to_name(reference: str, primitive_color_map: Dict[st
 
 def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, str]) -> str:
     """解析primitives引用"""
+    # 添加调试信息
+    if 'white' in reference:
+        print(f"Debug: resolve_primitives_reference called with: '{reference}'")
+    
     # 去掉light mode或dark mode
     reference = re.sub(r'\s*\(light mode\)', '', reference)
     reference = re.sub(r'\s*\(dark mode\)', '', reference)
@@ -406,12 +454,33 @@ def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, 
             if part:
                 filtered_parts.append(part)
     
+    # 添加调试信息
+    if 'white' in reference:
+        print(f"Debug: filtered_parts: {filtered_parts}")
+    
+    # 处理基础颜色（white, black, transparent等）
+    # 如果最后一个部分是基础颜色，直接使用它
+    if filtered_parts and filtered_parts[-1] in ['white', 'black', 'transparent']:
+        color_name = filtered_parts[-1]
+        if color_name in primitive_color_map:
+            return color_name
+        else:
+            print(f"Debug: Base color '{color_name}' not found in primitive_color_map")
+            print(f"Debug: Available base colors: {[k for k in primitive_color_map.keys() if k in ['white', 'black', 'transparent']]}")
+    
+    # 处理只有一个部分的情况（原来的逻辑）
+    elif len(filtered_parts) == 1:
+        color_name = filtered_parts[0]
+        if color_name in primitive_color_map:
+            return color_name
+        else:
+            print(f"Debug: Single color '{color_name}' not found in primitive_color_map")
+    
     # 处理颜色名称
     if len(filtered_parts) >= 2:
         # 最后两部分通常是颜色名和数字（如 brand.600）
         color_name = f"{filtered_parts[-2]}_{filtered_parts[-1]}"
         
-                
         # 检查是否存在
         if color_name in primitive_color_map:
             return color_name
@@ -446,6 +515,34 @@ def get_node_value(json, nodeRef):#
         v = v.get(path)
     return v['value']
 
+def traverse_radius_nodes(data: Dict[str, Any], radius_values: Dict[str, str]) -> None:
+    """遍历半径节点"""
+    for key, value in data.items():
+        if isinstance(value, dict) and 'value' in value and value.get('type') == 'dimension':
+            # 这是一个半径节点
+            radius_value = value['value']
+            xml_name = format_xml_name([key])
+            radius_values[xml_name] = f"{radius_value}dp"
+        elif isinstance(value, dict):
+            # 继续递归
+            traverse_radius_nodes(value, radius_values)
+
+def generate_radius_xml(radius_values: Dict[str, str], output_dir: str) -> None:
+    """生成radius_dimens.xml文件"""
+    xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    xml_content += '<resources>\n'
+    
+    for name, value in radius_values.items():
+        xml_content += f'    <dimen name="{name}">{value}</dimen>\n'
+    
+    xml_content += '</resources>'
+    
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, 'radius_dimens.xml')
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+    print(f"Generated radius_dimens.xml with {len(radius_values)} radius values")
+
 def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path: List[str],
                              light_semantic: Dict[str, str],
                              dark_semantic: Dict[str, str],
@@ -458,10 +555,18 @@ def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path
             if 'value' in value and isinstance(value['value'], str):
                 # 这是一个颜色引用节点
                 reference = value['value']
-                print(f"--{isinstance(reference,str)}")
+                # 添加调试信息
+                if 'text-primary_on-brand' in key:
+                    print(f"Debug: Found text-primary_on-brand node at path: {current_path}")
+                    print(f"Debug: Reference value: {reference}")
+                
                 if reference.startswith('{1. color modes'): #说明引用的是color modes下的节点，找到这个节点读取其value属性。
                     reference = get_node_value(full_data, reference[1:-1])
                 primitive_color_name = resolve_color_reference_to_name(reference, primitive_color_map)
+                
+                # 添加调试信息
+                if 'text-primary_on-brand' in key:
+                    print(f"Debug: Resolved primitive_color_name: {primitive_color_name}")
                 
                 if primitive_color_name:
                     xml_name = format_xml_name(current_path)
@@ -530,12 +635,12 @@ def print_summary(light_colors: Dict[str, str], dark_colors: Dict[str, str],
 
 
 def process_semantic_spacing(data:Dict[str,Any]):
-    semantic_dimens = {}
+    semantic_dimens = []
     spacing_node = data['3. spacing']
     for k,v in spacing_node.items():
         spacing_name = k
         reference_name = extract_content_between_spacing_and_bracket(v['value'][1:-1])
-        semantic_dimens[str.replace(spacing_name,"-","_")] = reference_name
+        semantic_dimens.append((str.replace(spacing_name,"-","_"), reference_name))
 
     return semantic_dimens
 
@@ -579,18 +684,29 @@ def main():
     semantic_dimensions = process_semantic_spacing(data)
     # 处理渐变
     gradients = process_gradients(data)
-    
+    # 处理半径
+    radius_values = process_radius_data(data)
+    # 处理typography
+    typography_styles = process_typography_data(data)
+    # 处理font sizes
+    text_sizes = process_font_sizes(data)
+
     # 生成XML文件
     generate_xml_files(light_colors, dark_colors, output_dir)
     generate_semantic_xml_files(light_semantic, dark_semantic, output_dir)
-    generate_dimens_xml(dimensions, os.path.join(output_dir, "values"), "dimens.xml")
-    generate_semantic_dimens_xml(semantic_dimensions,os.path.join(output_dir,"values"),"semantic_dimens.xml")
+    generate_ordered_dimens_xml(dimensions, os.path.join(output_dir, "values"), "dimens.xml")
+    generate_ordered_semantic_dimens_xml(semantic_dimensions,os.path.join(output_dir,"values"),"semantic_dimens.xml")
     generate_gradient_xml_files(gradients, output_dir)
+    generate_radius_xml(radius_values, os.path.join(output_dir, "values"))
+    generate_typography_xml_files(typography_styles, output_dir)
+    generate_text_dimens_xml(text_sizes, output_dir)
     
     # 打印摘要
     print_summary(light_colors, dark_colors, light_semantic, dark_semantic, output_dir)
     print(f"Spacing dimensions: {len(dimensions)}")
     print(f"Gradients: {len(gradients)}")
+    print(f"Radius values: {len(radius_values)}")
+    print(f"Typography styles: {len(typography_styles)}")
 
 
 def is_gradient_node(node: Dict[str, Any]) -> bool:
@@ -699,6 +815,27 @@ def process_gradients(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return gradients
 
 
+def process_radius_data(data: Dict[str, Any]) -> Dict[str, str]:
+    """处理radius模块，提取半径值"""
+    radius_values = {}
+    
+    # 检查可能的radius键名
+    radius_key = None
+    for key in data.keys():
+        if 'radius' in key.lower() and key.startswith('2.'):
+            radius_key = key
+            break
+    
+    if radius_key is None:
+        print("Warning: '2. radius' not found in JSON")
+        return radius_values
+    
+    print("Extracting radius values...")
+    traverse_radius_nodes(data[radius_key], radius_values)
+    
+    return radius_values
+
+
 def generate_gradient_xml_files(gradients: Dict[str, Dict[str, Any]], output_dir: str) -> None:
     """生成渐变XML文件"""
     gradient_dir = os.path.join(output_dir, "gradients")
@@ -719,6 +856,319 @@ def generate_gradient_xml_files(gradients: Dict[str, Dict[str, Any]], output_dir
             f.write(xml_content)
         
         print(f"Generated: {file_path}")
+
+
+def is_typography_node(node: Dict[str, Any]) -> bool:
+    """判断是否为typography节点"""
+    return node.get('type') == 'custom-typography' and 'value' in node
+
+
+def format_typography_name(node_name: str) -> str:
+    """格式化typography节点名称，将类似"display 2xl（72）"转换为"display_2xl" """
+    # 去掉括号内的内容
+    import re
+    name = re.sub(r'\s*（[^）]*）', '', node_name)
+    name = re.sub(r'\s*\([^)]*\)', '', name)
+    
+    # 将空格替换为下划线
+    name = name.replace(' ', '_')
+    
+    # 移除特殊字符，只保留字母、数字和下划线
+    name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    
+    # 移除连续的下划线
+    name = re.sub(r'_+', '_', name)
+    
+    # 移除开头和结尾的下划线
+    name = name.strip('_')
+    
+    return name.lower()
+
+
+def extract_typography_value(node_name: str, value_dict: Dict[str, Any]) -> Dict[str, str]:
+    """提取typography值，从节点名中提取字体大小"""
+    result = {}
+    
+    # 从节点名中提取字体大小
+    import re
+    # 匹配括号内的数字，支持中文和英文括号
+    size_match = re.search(r'[（(](\d+)[）)]', node_name)
+    if size_match:
+        size_value = size_match.group(1)
+        result['text_size'] = f"{size_value}sp"
+    
+    # 从value中提取其他属性
+    typography_value = value_dict.get('value', {})
+    
+    # 提取字体粗细
+    if 'fontWeight' in typography_value:
+        font_weight = typography_value['fontWeight']
+        if isinstance(font_weight, str):
+            # 将字符串形式的字体粗细转换为数值
+            weight_map = {
+                'thin': '100',
+                'extralight': '200',
+                'light': '300',
+                'regular': '400',
+                'medium': '500',
+                'semibold': '600',
+                'bold': '700',
+                'extrabold': '800',
+                'black': '900'
+            }
+            result['text_weight'] = weight_map.get(font_weight.lower(), '400')
+        elif isinstance(font_weight, (int, float)):
+            result['text_weight'] = str(int(font_weight))
+    
+    # 提取行高
+    if 'lineHeight' in typography_value:
+        line_height = typography_value['lineHeight']
+        if isinstance(line_height, dict) and 'value' in line_height:
+            line_height_value = line_height['value']
+            if isinstance(line_height_value, str):
+                # 处理行高值
+                if line_height_value.endswith('%'):
+                    # 如果是百分比，转换为小数
+                    percentage = float(line_height_value.rstrip('%'))
+                    result['line_height_multiplier'] = f"{percentage / 100:.2f}"
+                else:
+                    result['line_height'] = f"{line_height_value}sp"
+            elif isinstance(line_height_value, (int, float)):
+                result['line_height'] = f"{line_height_value}sp"
+        elif isinstance(line_height, str) and line_height.endswith('%'):
+            # 处理直接字符串形式的百分比
+            percentage = float(line_height.rstrip('%'))
+            result['line_height_multiplier'] = f"{percentage / 100:.2f}"
+    
+    # 提取字母间距
+    if 'letterSpacing' in typography_value:
+        letter_spacing = typography_value['letterSpacing']
+        if isinstance(letter_spacing, dict) and 'value' in letter_spacing:
+            spacing_value = letter_spacing['value']
+            if isinstance(spacing_value, str):
+                result['letter_spacing'] = spacing_value
+            elif isinstance(spacing_value, (int, float)):
+                result['letter_spacing'] = f"{spacing_value}sp"
+        elif isinstance(letter_spacing, (int, float)):
+            result['letter_spacing'] = f"{letter_spacing}sp"
+    
+    return result
+
+
+def traverse_typography_nodes(data: Dict[str, Any], 
+                              typography_styles: Dict[str, Dict[str, str]]) -> None:
+    """遍历typography节点下的直接子节点"""
+    for key, value in data.items():
+        xml_name = format_typography_name(key)
+        typography_values = extract_typography_value(key, value)
+
+        if typography_values:
+            typography_styles[xml_name] = typography_values
+            print(f"Found typography style: {xml_name} - {typography_values}")
+
+
+def process_typography_data(data: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    """处理typography模块，提取字体样式"""
+    typography_styles = {}
+    
+    # 精确匹配"typography"节点
+    if 'typography' not in data:
+        print("Warning: 'typography' not found in JSON")
+        return typography_styles
+    
+    print("Extracting typography styles...")
+    traverse_typography_nodes(data['typography'], typography_styles)
+    
+    return typography_styles
+
+
+def generate_typography_xml_files(typography_styles: Dict[str, Dict[str, str]], output_dir: str) -> None:
+    """生成typography XML文件"""
+    if not typography_styles:
+        print("No typography styles found, skipping XML generation")
+        return
+
+    # 生成text styles XML
+    text_styles_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    text_styles_content += '<resources>\n'
+
+    for style_name, style_values in sorted(typography_styles.items()):
+        text_styles_content += f'    <style name="{style_name}">\n'
+
+        if 'text_size' in style_values:
+            text_styles_content += f'        <item name="android:textSize">{style_values["text_size"]}</item>\n'
+
+        if 'text_weight' in style_values:
+            text_styles_content += f'        <item name="android:textStyle">{style_values["text_weight"]}</item>\n'
+
+        if 'line_height' in style_values:
+            text_styles_content += f'        <item name="android:lineHeight">{style_values["line_height"]}</item>\n'
+
+        if 'line_height_multiplier' in style_values:
+            text_styles_content += f'        <item name="android:lineHeightMultiplier">{style_values["line_height_multiplier"]}</item>\n'
+
+        if 'letter_spacing' in style_values:
+            text_styles_content += f'        <item name="android:letterSpacing">{style_values["letter_spacing"]}</item>\n'
+
+        text_styles_content += '    </style>\n'
+
+    text_styles_content += '</resources>'
+
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 写入text styles文件
+    text_styles_path = os.path.join(output_dir, "values", "text_styles.xml")
+    with open(text_styles_path, 'w', encoding='utf-8') as f:
+        f.write(text_styles_content)
+
+    print(f"Generated: {text_styles_path}")
+
+    # 生成dimens文件用于字体大小
+    dimens_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    dimens_content += '<resources>\n'
+
+    for style_name, style_values in sorted(typography_styles.items()):
+        if 'text_size' in style_values:
+            # 提取数值部分，去掉sp单位
+            size_value = style_values['text_size']
+            if size_value.endswith('sp'):
+                size_name = f"{style_name}"
+                dimens_content += f'    <dimen name="{size_name}">{size_value}</dimen>\n'
+
+    dimens_content += '</resources>'
+
+    dimens_path = os.path.join(output_dir, "values", "text_sizes.xml")
+    with open(dimens_path, 'w', encoding='utf-8') as f:
+        f.write(dimens_content)
+
+    print(f"Generated: {dimens_path}")
+
+    # 生成README文件
+    readme_content = """# Typography Styles
+
+This directory contains Android typography style files generated from design tokens.
+
+## Generated Files
+
+- `values/text_styles.xml` - Text style definitions with all typography properties
+- `values/text_sizes.xml` - Text size dimensions for easy reference
+
+## Usage
+
+### In XML:
+
+```xml
+<TextView
+    style="@style/display_2xl"
+    android:text="Sample Text" />
+```
+
+### In Kotlin/Java:
+
+```kotlin
+textView.setTextAppearance(context, R.style.display_2xl)
+```
+
+## Available Styles
+
+"""
+
+    for style_name, style_values in sorted(typography_styles.items()):
+        readme_content += f"### {style_name}\n\n"
+        readme_content += "**Properties:**\n"
+
+        if 'text_size' in style_values:
+            readme_content += f"- Text Size: {style_values['text_size']}\n"
+
+        if 'text_weight' in style_values:
+            readme_content += f"- Font Weight: {style_values['text_weight']}\n"
+
+        if 'line_height' in style_values:
+            readme_content += f"- Line Height: {style_values['line_height']}\n"
+
+        if 'line_height_multiplier' in style_values:
+            readme_content += f"- Line Height Multiplier: {style_values['line_height_multiplier']}\n"
+
+        if 'letter_spacing' in style_values:
+            readme_content += f"- Letter Spacing: {style_values['letter_spacing']}\n"
+
+        readme_content += "\n"
+
+    readme_path = os.path.join(output_dir, "typography_readme.md")
+    with open(readme_path, 'w', encoding='utf-8') as f:
+        f.write(readme_content)
+
+    print(f"Generated: {readme_path}")
+
+
+def traverse_font_size_nodes(font_size_data: Dict[str, Any], text_sizes: Dict[str, int]) -> None:
+    """遍历font size节点，提取文字大小"""
+    for key, value in font_size_data.items():
+        if isinstance(value, dict) and value.get('type') == 'dimension' and 'value' in value:
+            # 这是一个字体大小节点
+            size_value = value['value']
+
+            # 从节点名中提取text-后面的内容作为名称
+            if key.startswith('text-'):
+                xml_name = key[5:]  # 去掉'text-'前缀
+            else:
+                xml_name = key
+
+            # 清理名称，将连字符替换为下划线
+            xml_name = xml_name.replace('-', '_')
+
+            text_sizes[xml_name] = size_value
+            print(f"Found font size: {xml_name} = {size_value}sp")
+
+
+def process_font_sizes(data: Dict[str, Any]) -> Dict[str, int]:
+    """处理font size节点，提取文字大小"""
+    text_sizes = {}
+
+    # 查找"6. typography"节点
+    typography_key = None
+    for key in data.keys():
+        if key == '6. typography':
+            typography_key = key
+            break
+
+    if typography_key is None:
+        print("Warning: '6. typography' not found in JSON")
+        return text_sizes
+
+    # 查找"font size"节点
+    typography_data = data[typography_key]
+    if 'font size' not in typography_data:
+        print("Warning: 'font size' not found in typography")
+        return text_sizes
+
+    print("Extracting font sizes...")
+    traverse_font_size_nodes(typography_data['font size'], text_sizes)
+
+    return text_sizes
+
+
+def generate_text_dimens_xml(text_sizes: Dict[str, int], output_dir: str) -> None:
+    """生成text_dimens.xml文件，包含所有文字大小"""
+    xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
+    xml_content += '<resources>\n'
+
+    # 按名称排序
+    for name in sorted(text_sizes.keys()):
+        xml_content += f'    <dimen name="{name}">{text_sizes[name]}sp</dimen>\n'
+
+    xml_content += '</resources>'
+
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 写入文件
+    file_path = os.path.join(output_dir, "values", "text_dimens.xml")
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+
+    print(f"Generated: {file_path}")
 
 
 if __name__ == "__main__":
