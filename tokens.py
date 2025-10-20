@@ -6,7 +6,7 @@
 import json
 import os
 import re
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional, Union, Set
 
 
 def load_json_file(file_path: str) -> Dict[str, Any]:
@@ -42,7 +42,7 @@ def extract_color_value(value: str) -> str:
     return value
 
 
-def format_xml_name(name_parts: List[str], existing_names: set = None) -> str:
+def format_xml_name(name_parts: List[str], existing_names: Optional[Set[str]] = None) -> str:
     """格式化XML名称，将路径转换为下划线分隔的小写名称
     
     Args:
@@ -262,14 +262,25 @@ def traverse_spacing_dimensions(data: Dict[str, Any], path: List[str],
                 traverse_spacing_dimensions(value, current_path, dimensions)
 
 
-def generate_android_xml(colors: Dict[str, str], output_path: str, file_name: str) -> None:
-    """生成Android XML文件"""
+def generate_android_xml(colors: Dict[str, Union[str, Tuple[str, str]]], output_path: str, file_name: str) -> None:
+    """生成Android XML文件
+    
+    Args:
+        colors: 颜色字典，值可以是字符串（颜色值或引用）或元组（颜色值，注释）
+    """
     xml_content = '<?xml version="1.0" encoding="utf-8"?>\n'
     xml_content += '<resources>\n'
 
     # 按名称排序
     for name in sorted(colors.keys()):
-        xml_content += f'    <color name="{name}">{colors[name]}</color>\n'
+        color_data = colors[name]
+        
+        # 检查是否包含注释（跨模式引用的情况）
+        if isinstance(color_data, tuple):
+            color_value, comment = color_data
+            xml_content += f'    <color name="{name}">{color_value}</color>{comment}\n'
+        else:
+            xml_content += f'    <color name="{name}">{color_data}</color>\n'
 
     xml_content += '</resources>'
 
@@ -400,11 +411,11 @@ def generate_xml_files(light_colors: Dict[str, str], dark_colors: Dict[str, str]
                       output_dir: str) -> None:
     """生成Android XML文件"""
     print("Generating Android XML files...")
-    generate_android_xml(light_colors, os.path.join(output_dir, "values"), "primitive_color.xml")
-    generate_android_xml(dark_colors, os.path.join(output_dir, "values-night"), "primitive_color.xml")
+    generate_android_xml(light_colors, os.path.join(output_dir, "values"), "primitive_color.xml")  # type: ignore
+    generate_android_xml(dark_colors, os.path.join(output_dir, "values-night"), "primitive_color.xml")  # type: ignore
 
 
-def resolve_color_reference(reference: str, primitive_color_map: Dict[str, str]) -> str:
+def resolve_color_reference(reference: str, primitive_color_map: Dict[str, str]) -> Optional[str]:
     """解析颜色引用，从primitive color map中查找对应的颜色值"""
     # 去除开头和结尾的花括号
     if reference.startswith('{') and reference.endswith('}'):
@@ -437,34 +448,58 @@ def resolve_color_reference(reference: str, primitive_color_map: Dict[str, str])
     return None
 
 
-def resolve_color_reference_to_name(reference: str, primitive_color_map: Dict[str, str]) -> str:
-    """解析颜色引用，返回primitive color的名称"""
+def resolve_color_reference_to_name(reference: str, primitive_color_map: Dict[str, str]) -> Tuple[Optional[str], Optional[str]]:
+    """解析颜色引用,返回primitive color的名称和模式信息
+    
+    Returns:
+        Tuple[Optional[str], Optional[str]]: (颜色名称, 模式信息) 或 (None, None)
+        模式信息可以是 'light mode', 'dark mode' 或 None
+    """
     # 去除开头和结尾的花括号
     if reference.startswith('{') and reference.endswith('}'):
         reference = reference[1:-1]
     
-    # 处理直接的颜色值（以#开头）
+    # 处理直接的颜色值(以#开头)
     if reference.startswith('#'):
-        return None
+        return None, None
     
-    # 如果引用以 "primitives." 开头，直接解析
+    # 如果引用以 "primitives." 开头,直接解析
     if reference.startswith('primitives.'):
-        return resolve_primitives_reference(reference, primitive_color_map)
+        color_name = resolve_primitives_reference(reference, primitive_color_map)
+        # 提取模式信息
+        mode_info = extract_mode_from_reference(reference)
+        return color_name, mode_info
     
-    # 如果引用以 "1. color modes" 开头，需要特殊处理
+    # 如果引用以 "1. color modes" 开头,需要特殊处理
     elif reference.startswith('1. color modes'):
-        # 这种情况引用的是semantic color，我们需要找到它最终的primitive引用
-        # 但由于我们的设计，这里应该返回None，让semantic color直接引用primitive
-        return None
+        # 这种情况引用的是semantic color,我们需要找到它最终的primitive引用
+        # 但由于我们的设计,这里应该返回None,让semantic color直接引用primitive
+        return None, None
     
-    # 其他情况，尝试解析
+    # 其他情况,尝试解析
     else:
-        return resolve_primitives_reference(reference, primitive_color_map)
+        color_name = resolve_primitives_reference(reference, primitive_color_map)
+        mode_info = extract_mode_from_reference(reference)
+        return color_name, mode_info
 
 
-def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, str]) -> str:
+def extract_mode_from_reference(reference: str) -> Optional[str]:
+    """从引用中提取模式信息
+    
+    Returns:
+        'light mode', 'dark mode' 或 None
+    """
+    if '(light mode)' in reference.lower():
+        return 'light mode'
+    elif '(dark mode)' in reference.lower():
+        return 'dark mode'
+    else:
+        return None
+
+
+def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, str]) -> Optional[str]:
     """解析primitives引用"""
-    # 去掉light mode或dark mode后缀（在括号中的）
+    # 去掉light mode或dark mode后缀(在括号中的)
     reference = re.sub(r'\s*\(light mode\)', '', reference)
     reference = re.sub(r'\s*\(dark mode\)', '', reference)
     
@@ -530,7 +565,7 @@ def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, 
                 return color_name
     
     print(f"Warning: Could not find color name for reference '{reference}'")
-    return None
+    return None  # type: ignore
 
 
 def get_node_value(json, nodeRef):#
@@ -595,12 +630,14 @@ def collect_base_names(data: Dict[str, Any], path: List[str], base_names: Dict[s
 
 
 def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path: List[str],
-                             light_semantic: Dict[str, str],
-                             dark_semantic: Dict[str, str],
+                             light_semantic: Dict[str, Union[str, Tuple[str, str]]],
+                             dark_semantic: Dict[str, Union[str, Tuple[str, str]]],
                              primitive_color_map: Dict[str, str],
-                             existing_names: set = None,
-                             light_added_names: set = None,
-                             dark_added_names: set = None) -> None:
+                             light_primitive_map: Dict[str, str],
+                             dark_primitive_map: Dict[str, str],
+                             existing_names: Optional[Set[str]] = None,
+                             light_added_names: Optional[Set[str]] = None,
+                             dark_added_names: Optional[Set[str]] = None) -> None:
     """遍历语义颜色节点
     
     Args:
@@ -609,7 +646,9 @@ def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path
         path: 当前路径
         light_semantic: 日间模式语义颜色字典
         dark_semantic: 夜间模式语义颜色字典
-        primitive_color_map: 基础颜色映射
+        primitive_color_map: 基础颜色映射（合并的）
+        light_primitive_map: 日间模式基础颜色映射
+        dark_primitive_map: 夜间模式基础颜色映射
         existing_names: 冲突的基础名称集合
         light_added_names: 日间模式已添加的名称
         dark_added_names: 夜间模式已添加的名称
@@ -651,26 +690,52 @@ def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path
                     # 这是一个颜色引用
                     if reference.startswith('{1. color modes'): #说明引用的是color modes下的节点，找到这个节点读取其value属性。
                         reference = get_node_value(full_data, reference[1:-1])
-                    primitive_color_name = resolve_color_reference_to_name(reference, primitive_color_map)
+                    primitive_color_name, ref_mode = resolve_color_reference_to_name(reference, primitive_color_map)
                     
                     if primitive_color_name:
                         xml_name = format_xml_name(current_path, current_added_names)
-                        color_reference = f"@color/{primitive_color_name}"
                         
-                        if is_light_mode:
-                            light_semantic[xml_name] = color_reference
-                            light_added_names.add(xml_name)
-                        elif is_dark_mode:
-                            dark_semantic[xml_name] = color_reference
-                            dark_added_names.add(xml_name)
+                        # 检查是否存在跨模式引用
+                        current_mode = 'light mode' if is_light_mode else 'dark mode'
+                        is_cross_mode = ref_mode and ref_mode != current_mode
+                        
+                        if is_cross_mode:
+                            # 跨模式引用：使用直接颜色值而非引用
+                            # 从对应模式的primitive map中获取颜色值
+                            target_map = dark_primitive_map if ref_mode == 'dark mode' else light_primitive_map
+                            if primitive_color_name in target_map:
+                                color_value = target_map[primitive_color_name]
+                                comment = f"  <!-- {primitive_color_name} ({ref_mode}) -->"
+                                
+                                if is_light_mode:
+                                    light_semantic[xml_name] = (color_value, comment)
+                                    light_added_names.add(xml_name)
+                                elif is_dark_mode:
+                                    dark_semantic[xml_name] = (color_value, comment)
+                                    dark_added_names.add(xml_name)
+                            else:
+                                print(f"Warning: Cross-mode color '{primitive_color_name}' not found in {ref_mode} primitive map")
+                        else:
+                            # 同模式引用：使用@color引用
+                            color_reference = f"@color/{primitive_color_name}"
+                            
+                            if is_light_mode:
+                                light_semantic[xml_name] = color_reference
+                                light_added_names.add(xml_name)
+                            elif is_dark_mode:
+                                dark_semantic[xml_name] = color_reference
+                                dark_added_names.add(xml_name)
             else:
                 # 继续递归
                 traverse_semantic_colors(full_data, value, current_path, light_semantic,
-                                         dark_semantic, primitive_color_map, existing_names, 
+                                         dark_semantic, primitive_color_map, light_primitive_map,
+                                         dark_primitive_map, existing_names, 
                                          light_added_names, dark_added_names)
 
 
-def process_color_modes(data: Dict[str, Any], primitive_color_map: Dict[str, str]) -> Tuple[Dict[str, str], Dict[str, str]]:
+def process_color_modes(data: Dict[str, Any], primitive_color_map: Dict[str, str],
+                       light_primitive_map: Dict[str, str],
+                       dark_primitive_map: Dict[str, str]) -> Tuple[Dict[str, Union[str, Tuple[str, str]]], Dict[str, Union[str, Tuple[str, str]]]]:
     """处理color modes节点，提取语义颜色"""
     light_semantic = {}
     dark_semantic = {}
@@ -703,15 +768,16 @@ def process_color_modes(data: Dict[str, Any], primitive_color_map: Dict[str, str
                 # 调试输出
                 # print(f"Conflict detected: {key_name} (count: {count}) -> {base_name}")
     
-    # 第二步：遍历并生成颜色，传入冲突名称集合
+    # 第二步：遍历并生成颜色，传入冲突名称集合和分离的primitive maps
     traverse_semantic_colors(data, data[color_modes_key], [], light_semantic,
-                           dark_semantic, primitive_color_map, conflicting_names)
+                           dark_semantic, primitive_color_map, light_primitive_map,
+                           dark_primitive_map, conflicting_names)
     
     return light_semantic, dark_semantic
 
 
-def generate_semantic_xml_files(light_semantic: Dict[str, str], 
-                               dark_semantic: Dict[str, str], 
+def generate_semantic_xml_files(light_semantic: Dict[str, Union[str, Tuple[str, str]]], 
+                               dark_semantic: Dict[str, Union[str, Tuple[str, str]]], 
                                output_dir: str) -> None:
     """生成语义颜色XML文件"""
     print("Generating semantic color XML files...")
@@ -720,7 +786,8 @@ def generate_semantic_xml_files(light_semantic: Dict[str, str],
 
 
 def print_summary(light_colors: Dict[str, str], dark_colors: Dict[str, str],
-                  light_semantic: Dict[str, str], dark_semantic: Dict[str, str],
+                  light_semantic: Dict[str, Union[str, Tuple[str, str]]], 
+                  dark_semantic: Dict[str, Union[str, Tuple[str, str]]],
                   output_dir: str) -> None:
     """打印处理结果摘要"""
     print(f"\nSummary:")
@@ -773,8 +840,9 @@ def main():
     primitive_color_map.update(dark_colors)
     
         
-    # 处理color modes模块（语义颜色）
-    light_semantic, dark_semantic = process_color_modes(data, primitive_color_map)
+    # 处理color modes模块（语义颜色），传入分离的light和dark primitive maps
+    light_semantic, dark_semantic = process_color_modes(data, primitive_color_map,
+                                                       light_colors, dark_colors)
     
     # 处理spacing尺寸
     dimensions = process_spacing_dimensions(data)
