@@ -42,21 +42,43 @@ def extract_color_value(value: str) -> str:
     return value
 
 
-def format_xml_name(name_parts: List[str]) -> str:
-    """格式化XML名称，将路径转换为下划线分隔的小写名称"""
+def format_xml_name(name_parts: List[str], existing_names: set = None) -> str:
+    """格式化XML名称，将路径转换为下划线分隔的小写名称
+    
+    Args:
+        name_parts: 路径部分列表
+        existing_names: 已存在的名称集合，用于检测冲突
+    
+    Returns:
+        格式化后的XML名称
+    """
     # 清理名称，移除特殊字符和空格
     cleaned_parts = []
+    bracket_content = None
+    
     for part in name_parts:
-        # 移除 (light mode), (dark mode) 等后缀
-        part = re.sub(r'\s*\([^)]*\)', '', part)
+        # 提取括号内的数字（如果存在）
+        bracket_match = re.search(r'\(([^)]+)\)', part)
+        if bracket_match:
+            extracted_content = bracket_match.group(1).strip()
+            # 检查括号内是否是纯数字
+            if extracted_content.isdigit():
+                # 保留数字信息，稍后判断是否需要使用
+                bracket_content = extracted_content
+            # 移除括号整体
+            part_without_bracket = re.sub(r'\s*\([^)]*\)', '', part)
+        else:
+            part_without_bracket = part
+        
         # 替换空格和特殊字符为下划线
-        part = re.sub(r'[^a-zA-Z0-9]', '_', part)
+        part_clean = re.sub(r'[^a-zA-Z0-9]', '_', part_without_bracket)
         # 移除连续的下划线
-        part = re.sub(r'_+', '_', part)
+        part_clean = re.sub(r'_+', '_', part_clean)
         # 移除开头和结尾的下划线
-        part = part.strip('_')
-        if part:
-            cleaned_parts.append(part.lower())
+        part_clean = part_clean.strip('_')
+        
+        if part_clean:
+            cleaned_parts.append(part_clean.lower())
 
     # 移除 'colors' 前缀（如果存在）
     if cleaned_parts and cleaned_parts[0] == 'colors':
@@ -79,9 +101,17 @@ def format_xml_name(name_parts: List[str]) -> str:
     
     # 否则只使用最后一个节点名
     if len(cleaned_parts) > 1:
-        return cleaned_parts[-1]
+        base_name = cleaned_parts[-1]
+    else:
+        base_name = '_'.join(cleaned_parts)
     
-    return '_'.join(cleaned_parts)
+    # 检查是否需要添加括号内的数字（只有在名称冲突时才添加）
+    if bracket_content and existing_names is not None:
+        # 如果基础名称已经存在，则添加括号内的数字以避免冲突
+        if base_name in existing_names:
+            return f"{base_name}_{bracket_content}"
+    
+    return base_name
 
 
 def extract_content_between_spacing_and_bracket(input_string: str) -> str:
@@ -434,49 +464,49 @@ def resolve_color_reference_to_name(reference: str, primitive_color_map: Dict[st
 
 def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, str]) -> str:
     """解析primitives引用"""
-    # 添加调试信息
-    if 'white' in reference:
-        print(f"Debug: resolve_primitives_reference called with: '{reference}'")
-    
-    # 去掉light mode或dark mode
+    # 去掉light mode或dark mode后缀（在括号中的）
     reference = re.sub(r'\s*\(light mode\)', '', reference)
     reference = re.sub(r'\s*\(dark mode\)', '', reference)
     
     # 以点号分割路径
     path_parts = reference.split('.')
     
-    # 移除 'primitives', 'colors', 'base' 等前缀
+    # 移除 'primitives', 'colors' 等前缀，但保留 'base'
     filtered_parts = []
+    skip_keywords = ['primitives', 'colors', 'light mode', 'dark mode']
+    
     for part in path_parts:
-        if part not in ['primitives', 'colors', 'base']:
-            # 替换空格为下划线
-            part = part.replace(' ', '_')
-            if part:
-                filtered_parts.append(part)
+        # 跳过需要移除的关键字
+        if part in skip_keywords:
+            continue
+        # 替换空格为下划线（但要在判断后）
+        cleaned_part = part.replace(' ', '_')
+        if cleaned_part and cleaned_part not in [kw.replace(' ', '_') for kw in skip_keywords]:
+            filtered_parts.append(cleaned_part)
     
-    # 添加调试信息
-    if 'white' in reference:
-        print(f"Debug: filtered_parts: {filtered_parts}")
+    # 特殊处理 base 下的颜色（white, black, transparent）
+    # 检查是否是 base.white, base.black, base.transparent 这样的结构
+    if len(filtered_parts) == 2 and filtered_parts[0] == 'base':
+        color_name = filtered_parts[1]
+        if color_name in primitive_color_map:
+            return color_name
+        else:
+            print(f"Warning: Base color '{color_name}' not found in primitive_color_map")
     
-    # 处理基础颜色（white, black, transparent等）
+    # 处理基础颜色（white, black, transparent等）- 兼容没有base前缀的情况
     # 如果最后一个部分是基础颜色，直接使用它
     if filtered_parts and filtered_parts[-1] in ['white', 'black', 'transparent']:
         color_name = filtered_parts[-1]
         if color_name in primitive_color_map:
             return color_name
-        else:
-            print(f"Debug: Base color '{color_name}' not found in primitive_color_map")
-            print(f"Debug: Available base colors: {[k for k in primitive_color_map.keys() if k in ['white', 'black', 'transparent']]}")
     
-    # 处理只有一个部分的情况（原来的逻辑）
-    elif len(filtered_parts) == 1:
+    # 处理只有一个部分的情况
+    if len(filtered_parts) == 1:
         color_name = filtered_parts[0]
         if color_name in primitive_color_map:
             return color_name
-        else:
-            print(f"Debug: Single color '{color_name}' not found in primitive_color_map")
     
-    # 处理颜色名称
+    # 处理颜色名称（如 gray.900, brand.600）
     if len(filtered_parts) >= 2:
         # 最后两部分通常是颜色名和数字（如 brand.600）
         color_name = f"{filtered_parts[-2]}_{filtered_parts[-1]}"
@@ -486,21 +516,16 @@ def resolve_primitives_reference(reference: str, primitive_color_map: Dict[str, 
             return color_name
         
         # 如果不存在，尝试其他组合
-        # 例如：blue dark.600 -> blue_dark_600
+        # 例如：blue_dark.600 -> blue_dark_600
         if len(filtered_parts) >= 3:
             color_name = f"{filtered_parts[-3]}_{filtered_parts[-2]}_{filtered_parts[-1]}"
             if color_name in primitive_color_map:
                 return color_name
-            
-            # 再尝试：blue dark.600 -> blue_dark_600 (去掉空格)
-            color_name = f"{filtered_parts[-3]}{filtered_parts[-2]}_{filtered_parts[-1]}"
-            if color_name in primitive_color_map:
-                return color_name
     
     # 如果还是找不到，尝试从原始引用中提取
-    for part in filtered_parts:
-        if part.isdigit() and len(filtered_parts) > 1:
-            color_name = f"{filtered_parts[-2]}_{part}"
+    for i, part in enumerate(filtered_parts):
+        if part.isdigit() and i > 0:
+            color_name = f"{filtered_parts[i-1]}_{part}"
             if color_name in primitive_color_map:
                 return color_name
     
@@ -543,51 +568,106 @@ def generate_radius_xml(radius_values: Dict[str, str], output_dir: str) -> None:
         f.write(xml_content)
     print(f"Generated radius_dimens.xml with {len(radius_values)} radius values")
 
-def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path: List[str],
-                             light_semantic: Dict[str, str],
-                             dark_semantic: Dict[str, str],
-                             primitive_color_map: Dict[str, str]) -> None:
-    """遍历语义颜色节点"""
+def collect_base_names(data: Dict[str, Any], path: List[str], base_names: Dict[str, int]) -> None:
+    """收集所有基础名称（不带括号数字），统计在同一模式下的出现次数"""
     for key, value in data.items():
         current_path = path + [key]
         
         if isinstance(value, dict):
             if 'value' in value and isinstance(value['value'], str):
-                # 这是一个颜色引用节点
+                # 这是一个颜色节点，计算其基础名称
+                # 使用 existing_names=None 来获取不带括号数字的基础名称
+                base_name = format_xml_name(current_path, existing_names=None)
+                
+                # 根据路径判断是light mode还是dark mode，分别统计
+                path_str = ' '.join(current_path).lower()
+                if 'light mode' in path_str:
+                    key_name = f"light:{base_name}"
+                elif 'dark mode' in path_str:
+                    key_name = f"dark:{base_name}"
+                else:
+                    key_name = f"unknown:{base_name}"
+                
+                base_names[key_name] = base_names.get(key_name, 0) + 1
+            else:
+                # 继续递归
+                collect_base_names(value, current_path, base_names)
+
+
+def traverse_semantic_colors(full_data:Dict[str,Any], data: Dict[str, Any], path: List[str],
+                             light_semantic: Dict[str, str],
+                             dark_semantic: Dict[str, str],
+                             primitive_color_map: Dict[str, str],
+                             existing_names: set = None,
+                             light_added_names: set = None,
+                             dark_added_names: set = None) -> None:
+    """遍历语义颜色节点
+    
+    Args:
+        full_data: 完整的JSON数据
+        data: 当前需要遍历的数据
+        path: 当前路径
+        light_semantic: 日间模式语义颜色字典
+        dark_semantic: 夜间模式语义颜色字典
+        primitive_color_map: 基础颜色映射
+        existing_names: 冲突的基础名称集合
+        light_added_names: 日间模式已添加的名称
+        dark_added_names: 夜间模式已添加的名称
+    """
+    if light_added_names is None:
+        light_added_names = set()
+    if dark_added_names is None:
+        dark_added_names = set()
+    
+    for key, value in data.items():
+        current_path = path + [key]
+        
+        if isinstance(value, dict):
+            if 'value' in value and isinstance(value['value'], str):
+                # 这是一个颜色节点
                 reference = value['value']
-                # 添加调试信息
-                if 'text-primary_on-brand' in key:
-                    print(f"Debug: Found text-primary_on-brand node at path: {current_path}")
-                    print(f"Debug: Reference value: {reference}")
                 
-                if reference.startswith('{1. color modes'): #说明引用的是color modes下的节点，找到这个节点读取其value属性。
-                    reference = get_node_value(full_data, reference[1:-1])
-                primitive_color_name = resolve_color_reference_to_name(reference, primitive_color_map)
+                # 根据路径判断是light mode还是dark mode
+                path_str = ' '.join(current_path).lower()
+                is_light_mode = 'light mode' in path_str
+                is_dark_mode = 'dark mode' in path_str
                 
-                # 添加调试信息
-                if 'text-primary_on-brand' in key:
-                    print(f"Debug: Resolved primitive_color_name: {primitive_color_name}")
+                # 选择对应模式的 added_names
+                current_added_names = light_added_names if is_light_mode else (dark_added_names if is_dark_mode else set())
                 
-                if primitive_color_name:
-                    xml_name = format_xml_name(current_path)
-                    color_reference = f"@color/{primitive_color_name}"
+                # 判断是直接的颜色值还是引用
+                if reference.startswith('#'):
+                    # 直接的颜色值，提取并去掉透明度（如果是8位）
+                    color_value = extract_color_value(reference)
+                    xml_name = format_xml_name(current_path, current_added_names)
                     
-                    # 根据路径判断是light mode还是dark mode
-                    path_str = ' '.join(current_path).lower()
+                    if is_light_mode:
+                        light_semantic[xml_name] = color_value
+                        light_added_names.add(xml_name)
+                    elif is_dark_mode:
+                        dark_semantic[xml_name] = color_value
+                        dark_added_names.add(xml_name)
+                else:
+                    # 这是一个颜色引用
+                    if reference.startswith('{1. color modes'): #说明引用的是color modes下的节点，找到这个节点读取其value属性。
+                        reference = get_node_value(full_data, reference[1:-1])
+                    primitive_color_name = resolve_color_reference_to_name(reference, primitive_color_map)
                     
-                    if 'light mode' in path_str:
-                        light_semantic[xml_name] = color_reference
-                    elif 'dark mode' in path_str:
-                        dark_semantic[xml_name] = color_reference
-                    else:
-                        print()
-                        # 如果没有明确指定模式，同时添加到两个集合
-                        # light_semantic[xml_name] = color_reference
-                        # dark_semantic[xml_name] = color_reference
+                    if primitive_color_name:
+                        xml_name = format_xml_name(current_path, current_added_names)
+                        color_reference = f"@color/{primitive_color_name}"
+                        
+                        if is_light_mode:
+                            light_semantic[xml_name] = color_reference
+                            light_added_names.add(xml_name)
+                        elif is_dark_mode:
+                            dark_semantic[xml_name] = color_reference
+                            dark_added_names.add(xml_name)
             else:
                 # 继续递归
                 traverse_semantic_colors(full_data, value, current_path, light_semantic,
-                                         dark_semantic, primitive_color_map)
+                                         dark_semantic, primitive_color_map, existing_names, 
+                                         light_added_names, dark_added_names)
 
 
 def process_color_modes(data: Dict[str, Any], primitive_color_map: Dict[str, str]) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -607,8 +687,25 @@ def process_color_modes(data: Dict[str, Any], primitive_color_map: Dict[str, str
         return light_semantic, dark_semantic
     
     print("Processing semantic colors...")
-    traverse_semantic_colors(data,data[color_modes_key], [], light_semantic,
-                           dark_semantic, primitive_color_map)
+    
+    # 第一步：收集所有基础名称，统计在同一模式下的出现次数
+    base_names = {}
+    collect_base_names(data[color_modes_key], [], base_names)
+    
+    # 找出每个模式下出现多次的名称（需要解决冲突）
+    conflicting_names = set()
+    for key_name, count in base_names.items():
+        if count > 1:
+            # 提取基础名称（去掉 light: 或 dark: 前缀）
+            if ':' in key_name:
+                base_name = key_name.split(':', 1)[1]
+                conflicting_names.add(base_name)
+                # 调试输出
+                # print(f"Conflict detected: {key_name} (count: {count}) -> {base_name}")
+    
+    # 第二步：遍历并生成颜色，传入冲突名称集合
+    traverse_semantic_colors(data, data[color_modes_key], [], light_semantic,
+                           dark_semantic, primitive_color_map, conflicting_names)
     
     return light_semantic, dark_semantic
 

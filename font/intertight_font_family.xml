@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="100"
+        android:font="@font/intertight_thin.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="100"
+        android:font="@font/intertight_thinitalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="200"
+        android:font="@font/intertight_extralight.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="200"
+        android:font="@font/intertight_extralightitalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="300"
+        android:font="@font/intertight_light.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="300"
+        android:font="@font/intertight_lightitalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="400"
+        android:font="@font/intertight_regular.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="400"
+        android:font="@font/intertight_italic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="500"
+        android:font="@font/intertight_medium.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="500"
+        android:font="@font/intertight_mediumitalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="600"
+        android:font="@font/intertight_semibold.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="600"
+        android:font="@font/intertight_semibolditalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="700"
+        android:font="@font/intertight_bold.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="700"
+        android:font="@font/intertight_bolditalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="800"
+        android:font="@font/intertight_extrabold.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="800"
+        android:font="@font/intertight_extrabolditalic.ttf" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="900"
+        android:font="@font/intertight_black.ttf" />
+    <font
+        android:fontStyle="italic"
+        android:fontWeight="900"
+        android:font="@font/intertight_blackitalic.ttf" />
+</font-family>

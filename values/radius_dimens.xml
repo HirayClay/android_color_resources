@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="radius_none">0dp</dimen>
+    <dimen name="radius_xxs">2dp</dimen>
+    <dimen name="radius_xs">4dp</dimen>
+    <dimen name="radius_sm">6dp</dimen>
+    <dimen name="radius_md">8dp</dimen>
+    <dimen name="radius_xl">12dp</dimen>
+    <dimen name="radius_2xl">16dp</dimen>
+    <dimen name="radius_4xl">24dp</dimen>
+    <dimen name="radius_full">9999dp</dimen>
+    <dimen name="radius_lg">10dp</dimen>
+    <dimen name="radius_3xl">20dp</dimen>
+    <dimen name="radius_5xl">28dp</dimen>
+</resources>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="intertight_font_weights_v26">
+        <item>100</item>
+        <item>200</item>
+        <item>300</item>
+        <item>400</item>
+        <item>500</item>
+        <item>600</item>
+        <item>700</item>
+        <item>800</item>
+        <item>900</item>
+    </array>
+    <string name="intertight_font_family_v26">Intertight</string>
+    <array name="intertight_variation_settings">
+        <item>'wght' 100</item>
+        <item>'wght' 200</item>
+        <item>'wght' 300</item>
+        <item>'wght' 400</item>
+        <item>'wght' 500</item>
+        <item>'wght' 600</item>
+        <item>'wght' 700</item>
+        <item>'wght' 800</item>
+        <item>'wght' 900</item>
+    </array>
+</resources>

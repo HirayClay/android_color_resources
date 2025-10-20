@@ -78,13 +78,15 @@ class FontFile:
 class AndroidFontGenerator:
     """Generate Android font XML files"""
     
-    def __init__(self, static_dir: str = "static", output_dir: str = "font"):
+    def __init__(self, static_dir: str = "static", output_dir: str = "font", output_dir_v26: str = "font-v26"):
         self.static_dir = Path(static_dir)
         self.output_dir = Path(output_dir)
+        self.output_dir_v26 = Path(output_dir_v26)
         self.font_files: List[FontFile] = []
         
-        # Create output directory if it doesn't exist
+        # Create output directories if they don't exist
         self.output_dir.mkdir(exist_ok=True)
+        self.output_dir_v26.mkdir(exist_ok=True)
     
     def scan_font_files(self):
         """Scan static directory for font files"""
@@ -111,7 +113,32 @@ class AndroidFontGenerator:
             families[family].append(font_file)
         
         return families
-    
+
+    def create_font_v26_family_xml(self, family_name: str, font_files: List[FontFile]) -> str:
+        """Create Android font family XML string"""
+        
+        # Sort font files by weight and italic style
+        font_files.sort(key=lambda f: (f.weight_value, f.is_italic))
+        
+        xml_lines = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<font-family xmlns:app="http://schemas.android.com/apk/res-auto">',
+        ]
+        
+        # Add font elements
+        for font_file in font_files:
+            style = 'italic' if font_file.is_italic else 'normal'
+            font_path = f"@font/{font_file.filename}"
+            
+            xml_lines.append(f'    <font')
+            xml_lines.append(f'        app:fontStyle="{style}"')
+            xml_lines.append(f'        app:fontWeight="{font_file.weight_value}"')
+            xml_lines.append(f'        app:font="{font_path}" />')
+        
+        xml_lines.append('</font-family>')
+        
+        return '\n'.join(xml_lines)
+        
     def create_font_family_xml(self, family_name: str, font_files: List[FontFile]) -> str:
         """Create Android font family XML string"""
         
@@ -136,6 +163,7 @@ class AndroidFontGenerator:
         xml_lines.append('</font-family>')
         
         return '\n'.join(xml_lines)
+    
     
     def create_predefined_xml(self) -> str:
         """Create predefined font styles XML string"""
@@ -165,6 +193,41 @@ class AndroidFontGenerator:
         
         return '\n'.join(xml_lines)
     
+    def create_predefined_xml_v26(self) -> str:
+        """Create predefined font styles XML string for API 26+"""
+        
+        families = self.group_by_family()
+        
+        xml_lines = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<resources>'
+        ]
+        
+        for family_name, font_files in families.items():
+            # Create array resource for font family with v26 features
+            xml_lines.append(f'    <array name="{family_name.lower()}_font_weights_v26">')
+            
+            # Add weight values with variation settings
+            weights = sorted(set(f.weight_value for f in font_files))
+            for weight in weights:
+                xml_lines.append(f'        <item>{weight}</item>')
+            
+            xml_lines.append('    </array>')
+            
+            # Create string resource for font family name
+            xml_lines.append(f'    <string name="{family_name.lower()}_font_family_v26">{family_name}</string>')
+            
+            # Add font variation settings resource
+            xml_lines.append(f'    <array name="{family_name.lower()}_variation_settings">')
+            for weight in weights:
+                variation_setting = f"'wght' {weight}"
+                xml_lines.append(f'        <item>{variation_setting}</item>')
+            xml_lines.append('    </array>')
+        
+        xml_lines.append('</resources>')
+        
+        return '\n'.join(xml_lines)
+    
     def generate_xml_files(self):
         """Generate all XML files"""
         print("Generating Android font XML files...")
@@ -175,7 +238,7 @@ class AndroidFontGenerator:
         # Generate font family XML files
         for family_name, font_files in families.items():
             xml_content = self.create_font_family_xml(family_name, font_files)
-            
+
             # Write to file
             output_file = self.output_dir / f"{family_name.lower()}_font_family.xml"
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -191,6 +254,33 @@ class AndroidFontGenerator:
         
         # Generate README
         self._generate_readme(families)
+    
+    def generate_xml_files_v26(self):
+        """Generate all XML files for API 26+"""
+        print("Generating Android font XML files for API 26+...")
+        
+        # Group by family
+        families = self.group_by_family()
+        
+        # Generate font family XML files for v26
+        for family_name, font_files in families.items():
+            xml_content = self.create_font_v26_family_xml(family_name, font_files)
+            
+            # Write to font-v26 directory
+            output_file = self.output_dir_v26 / f"{family_name.lower()}_font_family.xml"
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(xml_content)
+            print(f"Generated v26: {output_file}")
+        
+        # Generate predefined styles XML for v26
+        predefined_xml = self.create_predefined_xml_v26()
+        predefined_file = self.output_dir_v26 / "font_predefined.xml"
+        with open(predefined_file, 'w', encoding='utf-8') as f:
+            f.write(predefined_xml)
+        print(f"Generated v26: {predefined_file}")
+        
+        # Generate README for v26
+        self._generate_readme_v26(families)
     
     def _generate_readme(self, families: Dict[str, List[FontFile]]):
         """Generate README file with usage instructions"""
@@ -247,6 +337,65 @@ The following font files are referenced by the XML files:
         
         print(f"Generated: {readme_file}")
     
+    def _generate_readme_v26(self, families: Dict[str, List[FontFile]]):
+        """Generate README file with usage instructions for API 26+"""
+        readme_content = """# Android Font Files (API 26+)
+
+This directory contains Android font XML files generated for API 26+ with variable font support.
+
+## Font Families
+
+"""
+        
+        for family_name, font_files in families.items():
+            readme_content += f"### {family_name}\n\n"
+            readme_content += "**Available weights:**\n\n"
+            
+            # Group by weight
+            weight_groups = {}
+            for font_file in font_files:
+                if font_file.weight_value not in weight_groups:
+                    weight_groups[font_file.weight_value] = []
+                weight_groups[font_file.weight_value].append(font_file)
+            
+            for weight in sorted(weight_groups.keys()):
+                fonts = weight_groups[weight]
+                for font_file in fonts:
+                    style = "Italic" if font_file.is_italic else "Regular"
+                    readme_content += f"- **{font_file.weight_name.title()} {style}** (weight: {weight})\n"
+            
+            readme_content += "\n**Usage in XML (API 26+):**\n"
+            readme_content += f"```xml\n<TextView\n"
+            readme_content += f"    android:fontFamily=\"@font/{family_name.lower()}_font_family\"\n"
+            readme_content += f"    android:textStyle=\"normal\"\n"
+            readme_content += f"    android:fontWeight=\"400\"\n"
+            # readme_content += f"    android:fontVariationSettings=\"'wght' 400\" />\n```\n\n"
+            
+            readme_content += "**Usage in Kotlin/Java (API 26+):**\n"
+            readme_content += f"```kotlin\n"
+            readme_content += f"val typeface = ResourcesCompat.getFont(context, R.font.{family_name.lower()}_font_family)\n"
+            readme_content += f"textView.typeface = typeface\n"
+            readme_content += f"// For API 26+, you can also use font variation settings\n"
+            # readme_content += f"textView.setFontVariationSettings(\"'wght' 600\")\n```\n\n"
+            readme_content += "---\n\n"
+        
+        readme_content += """## Font Files\n\nThe following font files are referenced by the XML files:\n\n"""
+        
+        for font_file in self.font_files:
+            readme_content += f"- `{font_file.filename}` - {font_file.font_family} {font_file.weight_name.title()} {'Italic' if font_file.is_italic else 'Regular'}\n"
+        
+        readme_content += "\n## API 26+ Features\n\n"
+        readme_content += "- **Font Variation Settings**: Support for variable fonts with `android:fontVariationSettings`\n"
+        readme_content += "- **TTC Index**: Support for TrueType Collections with `android:ttcIndex`\n"
+        readme_content += "- **Enhanced Font Weight**: Better support for custom font weights\n"
+        
+        # Write README
+        readme_file = self.output_dir_v26 / "README.md"
+        with open(readme_file, 'w', encoding='utf-8') as f:
+            f.write(readme_content)
+        
+        print(f"Generated v26: {readme_file}")
+    
     def run(self):
         """Run the font generation process"""
         print("Android Font XML Generator")
@@ -259,11 +408,15 @@ The following font files are referenced by the XML files:
             print("No font files found!")
             return
         
-        # Generate XML files
+        # Generate XML files for regular version
         self.generate_xml_files()
         
+        # Generate XML files for API 26+ version
+        self.generate_xml_files_v26()
+        
         print("\nFont XML generation completed!")
-        print(f"Output directory: {self.output_dir}")
+        print(f"Regular output directory: {self.output_dir}")
+        print(f"API 26+ output directory: {self.output_dir_v26}")
 
 def main():
     """Main function"""
@@ -274,11 +427,13 @@ def main():
                        help='Directory containing font files (default: static)')
     parser.add_argument('--output-dir', default='font', 
                        help='Output directory for XML files (default: font)')
+    parser.add_argument('--output-dir-v26', default='font-v26', 
+                       help='Output directory for API 26+ XML files (default: font-v26)')
     
     args = parser.parse_args()
     
     # Create generator and run
-    generator = AndroidFontGenerator(args.static_dir, args.output_dir)
+    generator = AndroidFontGenerator(args.static_dir, args.output_dir, args.output_dir_v26)
     generator.run()
 
 if __name__ == '__main__':

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<font-family xmlns:app="http://schemas.android.com/apk/res-auto">
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="100"
+        app:font="@font/intertight_thin.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="100"
+        app:font="@font/intertight_thinitalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="200"
+        app:font="@font/intertight_extralight.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="200"
+        app:font="@font/intertight_extralightitalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="300"
+        app:font="@font/intertight_light.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="300"
+        app:font="@font/intertight_lightitalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="400"
+        app:font="@font/intertight_regular.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="400"
+        app:font="@font/intertight_italic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="500"
+        app:font="@font/intertight_medium.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="500"
+        app:font="@font/intertight_mediumitalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="600"
+        app:font="@font/intertight_semibold.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="600"
+        app:font="@font/intertight_semibolditalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="700"
+        app:font="@font/intertight_bold.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="700"
+        app:font="@font/intertight_bolditalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="800"
+        app:font="@font/intertight_extrabold.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="800"
+        app:font="@font/intertight_extrabolditalic.ttf" />
+    <font
+        app:fontStyle="normal"
+        app:fontWeight="900"
+        app:font="@font/intertight_black.ttf" />
+    <font
+        app:fontStyle="italic"
+        app:fontWeight="900"
+        app:font="@font/intertight_blackitalic.ttf" />
+</font-family>

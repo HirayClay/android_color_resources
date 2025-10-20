@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="spacing_none">@dimen/spacing_0</dimen>
+    <dimen name="spacing_xxs">@dimen/spacing_0․5</dimen>
+    <dimen name="spacing_xs">@dimen/spacing_1</dimen>
+    <dimen name="spacing_md">@dimen/spacing_2</dimen>
+    <dimen name="spacing_lg">@dimen/spacing_3</dimen>
+    <dimen name="spacing_xl">@dimen/spacing_4</dimen>
+    <dimen name="spacing_2xl">@dimen/spacing_5</dimen>
+    <dimen name="spacing_3xl">@dimen/spacing_6</dimen>
+    <dimen name="spacing_4xl">@dimen/spacing_8</dimen>
+    <dimen name="spacing_6xl">@dimen/spacing_12</dimen>
+    <dimen name="spacing_7xl">@dimen/spacing_16</dimen>
+    <dimen name="spacing_8xl">@dimen/spacing_20</dimen>
+    <dimen name="spacing_9xl">@dimen/spacing_24</dimen>
+    <dimen name="spacing_10xl">@dimen/spacing_32</dimen>
+    <dimen name="spacing_11xl">@dimen/spacing_40</dimen>
+    <dimen name="spacing_sm">@dimen/spacing_1․5</dimen>
+    <dimen name="spacing_5xl">@dimen/spacing_10</dimen>
+</resources>

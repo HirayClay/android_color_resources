@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="3xs_10">10sp</dimen>
+    <dimen name="display_2xl_72">72sp</dimen>
+    <dimen name="display_lg_48">48sp</dimen>
+    <dimen name="display_md_36">36sp</dimen>
+    <dimen name="display_sm_30">30sp</dimen>
+    <dimen name="display_xl_60">60sp</dimen>
+    <dimen name="display_xs_24">24sp</dimen>
+    <dimen name="lg_18">18sp</dimen>
+    <dimen name="md_16">16sp</dimen>
+    <dimen name="sm_14">14sp</dimen>
+    <dimen name="xl_20">20sp</dimen>
+    <dimen name="xs_12">12sp</dimen>
+    <dimen name="xxs_11">11sp</dimen>
+</resources>
