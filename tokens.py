@@ -36,9 +36,10 @@ def should_include_in_dark(node_name: str) -> bool:
 
 
 def extract_color_value(value: str) -> str:
-    """提取颜色值，去掉透明度"""
-    if len(value) == 9:  # #RRGGBBAA格式
-        return value[:7]
+    """提取颜色值，将#RRGGBBAA转换为Android的#AARRGGBB格式"""
+    if len(value) == 9 and value.startswith('#'):  # #RRGGBBAA格式
+        # 将 #RRGGBBAA 转换为 #AARRGGBB
+        return '#' + value[7:9] + value[1:7]
     return value
 
 
@@ -810,7 +811,7 @@ def process_semantic_spacing(data:Dict[str,Any]):
 
 def main():
     # JSON文件路径
-    json_file = "design-tokens.tokens(1).json"
+    json_file = "design-tokens.tokens(5).json"
 
     # 输出目录 - 使用当前目录
     output_dir = "."
